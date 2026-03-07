@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仅听觉</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #game-container {
+            text-align: center;
+        }
+        #image-container {
+            margin-bottom: 20px;
+        }
+        #animal-image {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        #input-container {
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+        }
+        #start-test {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        /* 结果页面样式 */
+        #result-screen {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        #resultTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        #resultTable th, #resultTable td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        #resultTable th {
+            background-color: #f2f2f2;
+        }
+        
+        #saveButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        
+        #saveButton:hover {
+            background-color: #0b7dda;
+        }
+        
+        #saveStatus {
+            margin-top: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="input-container">
+            <input type="text" id="username" placeholder="请输入用户名" />
+            <button id="start-test" disabled>开始测试</button>
+        </div>
+        <div id="image-container">
+            <img id="animal-image" src="animalsPic/blank.png" alt="动物图片">
+        </div>
+        <audio id="animal-audio" src="" preload="auto"></audio>
+    </div>
+
+    <!-- 结果页面 -->
+    <div id="result-screen">
+        <h2>实验完成</h2>
+        <table id="resultTable">
+            <tr><th colspan="2">仅听觉</th></tr>
+            <tr><td>被试姓名</td><td id="result-username"></td></tr>
+            <tr><td>开始时间</td><td id="result-startTime"></td></tr>
+            <tr><td>结束时间</td><td id="result-endTime"></td></tr>
+            <tr><td>命中次数</td><td id="result-hitCount"></td></tr>
+            <tr><td>虚报次数</td><td id="result-falseAlarmCount"></td></tr>
+            <tr><td>平均反应时间</td><td id="result-avgReactionTime"></td></tr>
+            <tr><td>感受性指标(d')</td><td id="result-dPrime"></td></tr>
+        </table>
+        <button id="saveButton">下载完整数据</button>
+        <p id="saveStatus"></p>
+        <button id="restart-test" style="margin-top: 20px;">重新测试</button>
+    </div>
+
+    <script>
+        const dogImage = "animalsPic/blank.png";
+        const dogAudio = "voice/dog.mp3";
+        const animalImages = ["animalsPic/blank.png"];
+        const animalAudios = ["voice/cat.mp3", "voice/cow.mp3","voice/dark.mp3", "voice/forg.mp3", "voice/pig.mp3","voice/sheep.mp3"];
+
+        let currentSet = 0;
+        let results = [];
+        let startTime = 0;
+        let username = "";
+        let questionPairs = [];
+        let hasResponded = false;
+        let experimentStartTime = null;
+        let experimentEndTime = null;
+
+        const imageElement = document.getElementById("animal-image");
+        const audioElement = document.getElementById("animal-audio");
+        const startTestButton = document.getElementById("start-test");
+        const usernameInput = document.getElementById("username");
+        const gameContainer = document.getElementById("game-container");
+        const resultScreen = document.getElementById("result-screen");
+        const saveButton = document.getElementById("saveButton");
+        const saveStatus = document.getElementById("saveStatus");
+        const restartButton = document.getElementById("restart-test");
+
+        // 结果表格元素
+        const resultUsername = document.getElementById("result-username");
+        const resultStartTime = document.getElementById("result-startTime");
+        const resultEndTime = document.getElementById("result-endTime");
+        const resultHitCount = document.getElementById("result-hitCount");
+        const resultFalseAlarmCount = document.getElementById("result-falseAlarmCount");
+        const resultAvgReactionTime = document.getElementById("result-avgReactionTime");
+        const resultDPrime = document.getElementById("result-dPrime");
+
+        usernameInput.addEventListener("input", () => {
+            username = usernameInput.value.trim();
+            startTestButton.disabled = !username;
+        });
+
+        function generateQuestionPairs() {
+            const pairs = [];
+            
+            // 生成15组狗狗声音（视觉为空白）
+            for (let i = 0; i < 15; i++) {
+                pairs.push({ image: dogImage, audio: dogAudio, isCorrect: true });
+            }
+
+            // 生成45组其他动物声音（视觉为空白）
+            for (let i = 0; i < 45; i++) {
+                const { image, audio } = getRandomAnimal();
+                pairs.push({ image, audio, isCorrect: false });
+            }
+
+            // 打乱顺序
+            for (let i = pairs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+            }
+
+            return pairs;
+        }
+
+        function getRandomAnimal() {
+            const randomIndex = Math.floor(Math.random() * animalAudios.length);
+            return {
+                image: animalImages[0],
+                audio: animalAudios[randomIndex]
+            };
+        }
+
+        function startTest() {
+            results = [];
+            currentSet = 0;
+            questionPairs = generateQuestionPairs();
+            experimentStartTime = new Date();
+            nextPair();
+            startTestButton.disabled = true;
+            usernameInput.disabled = true;
+        }
+
+        function nextPair() {
+            if (currentSet < 60) {
+                const { image, audio, isCorrect } = questionPairs[currentSet];
+                imageElement.src = image;
+                audioElement.src = audio;
+                audioElement.play();
+                results.push({ 
+                    image, 
+                    audio, 
+                    isCorrect, 
+                    reactionTime: null, 
+                    selectedCorrect: false 
+                });
+                startTime = Date.now();
+                hasResponded = false;
+                setTimeout(() => { imageElement.src = "animalsPic/blank.png"; }, 1000);
+                currentSet++;
+                setTimeout(nextPair, 1500);
+            } else {
+                experimentEndTime = new Date();
+                showResults();
+            }
+        }
+
+        function showResults() {
+            // 计算基本统计数据
+            let totalTrials = results.length;
+            let dogTrials = results.filter(r => r.isCorrect).length;
+            let otherTrials = totalTrials - dogTrials;
+            
+            // 计算命中率（狗狗声音时按键）
+            let hitCount = results.filter(r => r.isCorrect && r.reactionTime !== null).length;
+            let hitRate = dogTrials > 0 ? hitCount / dogTrials : 0;
+            
+            // 计算虚报率（非狗狗声音时按键）
+            let falseAlarmCount = results.filter(r => !r.isCorrect && r.reactionTime !== null).length;
+            let falseAlarmRate = otherTrials > 0 ? falseAlarmCount / otherTrials : 0;
+            
+            // 计算所有有效反应的平均反应时间
+            let validResponses = results.filter(r => r.reactionTime !== null);
+            let totalReactionTime = validResponses.reduce((sum, r) => sum + r.reactionTime, 0);
+            let avgReactionTime = validResponses.length > 0 ? (totalReactionTime / validResponses.length).toFixed(2) + "ms" : "无数据";
+            
+            // 计算d-prime（使用校正后的方法）
+            let dPrime = calculateDPrime(hitCount, falseAlarmCount, dogTrials, otherTrials).toFixed(2);
+
+            // 更新结果表格
+            resultUsername.textContent = username;
+            resultStartTime.textContent = formatDateTime(experimentStartTime);
+            resultEndTime.textContent = formatDateTime(experimentEndTime);
+            resultHitCount.textContent = hitCount;
+            resultFalseAlarmCount.textContent = falseAlarmCount;
+            resultAvgReactionTime.textContent = avgReactionTime;
+            resultDPrime.textContent = dPrime;
+            
+            // 显示结果页面
+            gameContainer.style.display = "none";
+            resultScreen.style.display = "flex";
+        }
+
+        function calculateDPrime(hits, falseAlarms, signalTrials, noiseTrials) {
+            // 极端值校正（对数线性规则）
+            const correctedHR = (hits + 0.5) / (signalTrials + 1);
+            const correctedFAR = (falseAlarms + 0.5) / (noiseTrials + 1);
+            
+            // 计算Z分数
+            const zHit = Math.sqrt(2) * erfInv(2 * correctedHR - 1);
+            const zFalseAlarm = Math.sqrt(2) * erfInv(2 * correctedFAR - 1);
+            
+            return zHit - zFalseAlarm;
+        }
+
+        // 误差函数反函数近似计算
+        function erfInv(x) {
+            const a = 0.147;
+            const sign = x < 0 ? -1 : 1;
+            const temp = 2/(Math.PI * a) + Math.log(1 - x*x)/2;
+            return sign * Math.sqrt(Math.sqrt(temp*temp - Math.log(1 - x*x)/a) - temp);
+        }
+
+        function handleResponse() {
+            if (!hasResponded) {
+                const reactionTime = Date.now() - startTime;
+                const lastResult = results[results.length - 1];
+                lastResult.reactionTime = reactionTime;
+                lastResult.selectedCorrect = lastResult.isCorrect;
+                hasResponded = true;
+            }
+        }
+
+        function handleSpacebarEvent(event) {
+            if (event.code === "Space") {
+                handleResponse();
+            }
+        }
+
+        // 格式化日期时间
+        function formatDateTime(date) {
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }).replace(/\//g, '-');
+        }
+
+        function downloadResults() {
+            // 计算基本统计数据
+            let totalTrials = results.length;
+            let dogTrials = results.filter(r => r.isCorrect).length;
+            let otherTrials = totalTrials - dogTrials;
+            
+            // 计算命中率（狗狗声音时按键）
+            let hitCount = results.filter(r => r.isCorrect && r.reactionTime !== null).length;
+            let hitRate = dogTrials > 0 ? hitCount / dogTrials : 0;
+            
+            // 计算虚报率（非狗狗声音时按键）
+            let falseAlarmCount = results.filter(r => !r.isCorrect && r.reactionTime !== null).length;
+            let falseAlarmRate = otherTrials > 0 ? falseAlarmCount / otherTrials : 0;
+            
+            // 计算漏报率（狗狗声音时未按键）
+            let missedCount = results.filter(r => r.isCorrect && r.reactionTime === null).length;
+            let missedRate = dogTrials > 0 ? missedCount / dogTrials : 0;
+            
+            // 计算正确拒绝率（非狗狗声音时未按键）
+            let correctRejectionCount = results.filter(r => !r.isCorrect && r.reactionTime === null).length;
+            let correctRejectionRate = otherTrials > 0 ? correctRejectionCount / otherTrials : 0;
+            
+            // 计算所有有效反应的平均反应时间
+            let validResponses = results.filter(r => r.reactionTime !== null);
+            let totalReactionTime = validResponses.reduce((sum, r) => sum + r.reactionTime, 0);
+            let avgReactionTime = validResponses.length > 0 ? (totalReactionTime / validResponses.length).toFixed(2) + "ms" : "无数据";
+            
+            // 计算狗狗声音配对的反应时间（保留但不显示）
+            let dogResponses = results.filter(r => r.isCorrect && r.reactionTime !== null);
+            let dogTotalReactionTime = dogResponses.reduce((sum, r) => sum + r.reactionTime, 0);
+            let avgDogReactionTime = dogResponses.length > 0 ? (dogTotalReactionTime / dogResponses.length).toFixed(2) + "ms" : "无数据";
+            
+            // 计算d-prime（使用校正后的方法）
+            let dPrime = calculateDPrime(hitCount, falseAlarmCount, dogTrials, otherTrials).toFixed(2);
+
+            // 构建CSV内容（保留所有统计指标）
+            const csvRows = [
+                ["序号", "图片", "音频", "类型", "反应时间(ms)", "响应情况"]
+            ];
+
+            results.forEach((result, index) => {
+                csvRows.push([
+                    index + 1,
+                    result.image,
+                    result.audio,
+                    result.isCorrect ? "狗狗声音" : "其他声音",
+                    result.reactionTime || "无",
+                    result.reactionTime !== null ? 
+                        (result.isCorrect ? "命中" : "虚报") : 
+                        (result.isCorrect ? "漏报" : "正确拒绝")
+                ]);
+            });
+
+            // 添加信息汇总（保留所有统计指标）
+            csvRows.push(["\n汇总信息"]);
+            csvRows.push(["用户名", username]);
+            csvRows.push(["总测试次数", totalTrials]);
+            csvRows.push(["狗狗声音次数", dogTrials]);
+            csvRows.push(["其他动物声音次数", otherTrials]);
+            csvRows.push(["命中次数（狗狗声音时按键）", hitCount]);
+            csvRows.push(["命中率", (hitRate * 100).toFixed(2) + "%"]);
+            csvRows.push(["虚报次数（非狗狗声音时按键）", falseAlarmCount]);
+            csvRows.push(["虚报率", (falseAlarmRate * 100).toFixed(2) + "%"]);
+            csvRows.push(["漏报次数（狗狗声音时未按键）", missedCount]);
+            csvRows.push(["漏报率", (missedRate * 100).toFixed(2) + "%"]);
+            csvRows.push(["正确拒绝次数（非狗狗声音时未按键）", correctRejectionCount]);
+            csvRows.push(["正确拒绝率", (correctRejectionRate * 100).toFixed(2) + "%"]);
+            csvRows.push(["平均反应时间", avgReactionTime]);
+            csvRows.push(["狗狗声音平均反应时间", avgDogReactionTime]); // 保留但不显示在页面
+            csvRows.push(["感受性指标(d')", dPrime]);
+            csvRows.push(["测试开始时间", formatDateTime(experimentStartTime)]);
+            csvRows.push(["测试结束时间", formatDateTime(experimentEndTime)]);
+
+            const csvContent = csvRows.map(row => row.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${username}_仅听觉结果.csv`;
+            link.click();
+            
+            saveStatus.textContent = "数据已保存为CSV文件";
+        }
+
+        function restartTest() {
+            usernameInput.disabled = false;
+            startTestButton.disabled = !usernameInput.value.trim();
+            usernameInput.value = "";
+            results = [];
+            currentSet = 0;
+            questionPairs = [];
+            
+            // 隐藏结果页面，显示游戏容器
+            resultScreen.style.display = "none";
+            gameContainer.style.display = "block";
+        }
+
+        document.addEventListener("keydown", handleSpacebarEvent);
+        document.addEventListener("click", handleResponse);
+        document.addEventListener("touchstart", handleResponse);
+        saveButton.addEventListener("click", downloadResults);
+        restartButton.addEventListener("click", restartTest);
+        startTestButton.addEventListener("click", startTest);
+    </script>
+</body>
+</html>
