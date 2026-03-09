@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>少即是多</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #f0f0f0;
+      touch-action: manipulation;
+      overflow: hidden;
+    }
+
+    /* Start screen styles */
+    #startScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      text-align: center;
+      max-width: 500px;
+    }
+    
+    #usernameInput {
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 20px;
+      width: 300px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    
+    #startButton {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    
+    #startButton:hover {
+      background-color: #45a049;
+    }
+
+    /* Experiment container */
+    .container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: none;
+    }
+
+    .background {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: -1;
+    }
+
+    .scoreboard {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .score {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 1.2cm;
+      height: 1.2cm;
+    }
+
+    .snack {
+      width: 1cm;
+      height: 1cm;
+    }
+
+    .count {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .buttons {
+      position: absolute;
+      bottom: 2cm;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12cm;
+    }
+
+    .action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      transition: transform 0.2s ease-out;
+      transform-origin: center;
+    }
+
+    /* 鼠标悬停放大效果 */
+    .action-btn:hover {
+      transform: scale(1.1);
+    }
+
+    /* 点击/按键放大效果 */
+    .action-btn:active, 
+    .action-btn.active {
+      transform: scale(1.1);
+    }
+
+    .button-img {
+      width: 8.49cm;
+      height: 6cm;
+      pointer-events: none;
+    }
+
+    .restart-btn {
+      position: absolute;
+      bottom: 1cm;
+      right: 1cm;
+      width: 1cm;
+      height: 1cm;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
+
+    .restart-img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .stats {
+      position: absolute;
+      bottom: 1cm;
+      right: 2.5cm;
+      font-size: 1.5em;
+      color: #fff;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+
+    /* End screen styles */
+    #endScreen {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      padding: 20px;
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    #resultTable {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      text-align: left;
+    }
+    
+    #resultTable th, #resultTable td {
+      padding: 8px;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    #resultTable th {
+      background-color: #f2f2f2;
+    }
+    
+    #saveButton {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+    
+    #saveButton:hover {
+      background-color: #0b7dda;
+    }
+    
+    #saveStatus {
+      margin-top: 20px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h2>少即是多实验</h2>
+    <p>请输入被试姓名：</p>
+    <input type="text" id="usernameInput" placeholder="请输入姓名">
+    <button id="startButton">开始实验</button>
+  </div>
+
+  <div class="container" id="experimentScreen">
+    <img src="lm/desk.png" alt="桌面背景" class="background">
+
+    <div class="scoreboard">
+      <div class="score red-score">
+        <img src="lm/red2.png" alt="Red Avatar" class="avatar">
+        <div id="red-count" class="count"></div>
+      </div>
+      <div class="score green-score">
+        <img src="lm/green2.png" alt="Green Avatar" class="avatar">
+        <div id="green-count" class="count"></div>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button id="red-btn" class="action-btn">
+        <img src="lm/red.png" alt="Red Button" class="button-img">
+      </button>
+      <button id="green-btn" class="action-btn">
+        <img src="lm/green.png" alt="Green Button" class="button-img">
+      </button>
+    </div>
+
+    <div class="stats" id="click-stats">
+      (0/0)
+    </div>
+
+    <button class="restart-btn" id="restart-btn">
+      <img src="lm/restart.png" alt="Restart Button" class="restart-img">
+    </button>
+  </div>
+
+  <div id="endScreen">
+    <h2>实验完成</h2>
+    <table id="resultTable">
+      <tr><th colspan="2">少即是多</th></tr>
+      <tr><td>被试姓名</td><td id="result-username"></td></tr>
+      <tr><td>开始时间</td><td id="result-startTime"></td></tr>
+      <tr><td>结束时间</td><td id="result-endTime"></td></tr>
+      <tr><td>红色按钮点击次数</td><td id="result-redClicks"></td></tr>
+      <tr><td>绿色按钮点击次数</td><td id="result-greenClicks"></td></tr>
+      <tr><td>总点击次数</td><td id="result-totalClicks"></td></tr>
+      <tr><td>红色按钮平均反应时</td><td id="result-avgRedTime"></td></tr>
+      <tr><td>绿色按钮平均反应时</td><td id="result-avgGreenTime"></td></tr>
+      <tr><td>总平均反应时</td><td id="result-avgTotalTime"></td></tr>
+    </table>
+    <button id="saveButton">保存数据</button>
+    <p id="saveStatus"></p>
+  </div>
+
+  <script>
+    // 实验数据
+    let experimentData = {
+      username: "",
+      startTime: null,
+      endTime: null,
+      trials: [],
+      redClicks: 0,
+      greenClicks: 0,
+      totalClicks: 0,
+      redReactionTimes: [], // 存储红色按钮反应时间
+      greenReactionTimes: [], // 存储绿色按钮反应时间
+      allReactionTimes: [] // 存储所有反应时间
+    };
+
+    // 状态变量
+    const state = {
+      redCount: 0,
+      greenCount: 0,
+      redButtonClicks: 0,
+      clickCount: 0,
+      buttonsEnabled: true,
+      buttonShowTime: null // 记录按钮显示的时间
+    };
+
+    // DOM元素
+    const elements = {
+      startScreen: document.getElementById('startScreen'),
+      experimentScreen: document.getElementById('experimentScreen'),
+      endScreen: document.getElementById('endScreen'),
+      usernameInput: document.getElementById('usernameInput'),
+      startButton: document.getElementById('startButton'),
+      redCount: document.getElementById('red-count'),
+      greenCount: document.getElementById('green-count'),
+      redButton: document.getElementById('red-btn'),
+      greenButton: document.getElementById('green-btn'),
+      restartButton: document.getElementById('restart-btn'),
+      clickStats: document.getElementById('click-stats'),
+      buttons: document.querySelector('.buttons'),
+      resultText: document.getElementById('resultText'),
+      saveButton: document.getElementById('saveButton'),
+      saveStatus: document.getElementById('saveStatus'),
+      // 结果表格元素
+      resultUsername: document.getElementById('result-username'),
+      resultStartTime: document.getElementById('result-startTime'),
+      resultEndTime: document.getElementById('result-endTime'),
+      resultRedClicks: document.getElementById('result-redClicks'),
+      resultGreenClicks: document.getElementById('result-greenClicks'),
+      resultTotalClicks: document.getElementById('result-totalClicks'),
+      resultAvgRedTime: document.getElementById('result-avgRedTime'),
+      resultAvgGreenTime: document.getElementById('result-avgGreenTime'),
+      resultAvgTotalTime: document.getElementById('result-avgTotalTime')
+    };
+
+    // 开始实验
+    function startExperiment() {
+      const username = elements.usernameInput.value.trim();
+      if (!username) {
+        alert("请输入被试姓名");
+        return;
+      }
+      
+      // 初始化实验数据
+      experimentData = {
+        username: username,
+        startTime: new Date(),
+        endTime: null,
+        trials: [],
+        redClicks: 0,
+        greenClicks: 0,
+        totalClicks: 0,
+        redReactionTimes: [],
+        greenReactionTimes: [],
+        allReactionTimes: []
+      };
+      
+      // 初始化状态
+      state.redCount = 0;
+      state.greenCount = 0;
+      state.redButtonClicks = 0;
+      state.clickCount = 0;
+      state.buttonsEnabled = true;
+      state.buttonShowTime = new Date().getTime();
+      
+      // 显示实验界面
+      elements.startScreen.style.display = 'none';
+      elements.experimentScreen.style.display = 'block';
+      
+      // 更新计数
+      updateCount();
+    }
+
+    // 更新计数显示
+    function updateCount() {
+      elements.redCount.innerHTML = '';
+      elements.greenCount.innerHTML = '';
+
+      for (let i = 0; i < state.redCount; i++) {
+        const snack = document.createElement('img');
+        snack.src = 'lm/snack.png';
+        snack.alt = 'Snack';
+        snack.classList.add('snack');
+        elements.redCount.appendChild(snack);
+      }
+
+      for (let i = 0; i < state.greenCount; i++) {
+        const snack = document.createElement('img');
+        snack.src = 'lm/snack.png';
+        snack.alt = 'Snack';
+        snack.classList.add('snack');
+        elements.greenCount.appendChild(snack);
+      }
+
+      elements.clickStats.textContent = `(${state.redButtonClicks}/${state.clickCount})`;
+    }
+
+    // 随机交换按钮位置
+    function swapButtons() {
+      if (Math.random() > 0.5) {
+        elements.buttons.appendChild(elements.redButton);
+      } else {
+        elements.buttons.appendChild(elements.greenButton);
+      }
+    }
+
+    // 处理按钮点击
+    function handleButtonClick(buttonType) {
+      if (!state.buttonsEnabled || state.clickCount >= 16) return;
+      
+      state.buttonsEnabled = false;
+      const button = buttonType === 'red' ? elements.redButton : elements.greenButton;
+      
+      // 计算反应时间（从按钮显示到点击的时间）
+      const now = new Date();
+      const reactionTime = state.buttonShowTime ? now.getTime() - state.buttonShowTime : 0;
+      
+      // 添加active类触发放大效果
+      button.classList.add('active');
+      
+      // 记录试验数据
+      const trialData = {
+        trialNumber: state.clickCount + 1,
+        buttonClicked: buttonType,
+        timestamp: now.toISOString(),
+        reactionTime: reactionTime
+      };
+      
+      // 200ms后移除active类并隐藏按钮
+      setTimeout(() => {
+        button.classList.remove('active');
+        
+        // 更新状态
+        if (buttonType === 'red') {
+          state.redCount += 1;
+          state.greenCount += 3;
+          state.redButtonClicks++;
+          experimentData.redClicks++;
+          experimentData.redReactionTimes.push(reactionTime);
+        } else {
+          state.redCount += 3;
+          state.greenCount += 1;
+          experimentData.greenClicks++;
+          experimentData.greenReactionTimes.push(reactionTime);
+        }
+        state.clickCount++;
+        experimentData.totalClicks++;
+        experimentData.allReactionTimes.push(reactionTime);
+        
+        // 完成试验数据
+        experimentData.trials.push(trialData);
+        
+        updateCount();
+        swapButtons();
+        
+        // 隐藏按钮
+        elements.redButton.style.display = 'none';
+        elements.greenButton.style.display = 'none';
+        
+        // 2秒后重新显示按钮
+        setTimeout(() => {
+          if (state.clickCount < 16) {
+            elements.redButton.style.display = 'block';
+            elements.greenButton.style.display = 'block';
+            state.buttonsEnabled = true;
+            // 记录按钮显示的时间
+            state.buttonShowTime = new Date().getTime();
+          } else {
+            endExperiment();
+          }
+        }, 2000);
+      }, 200);
+    }
+
+    // 计算平均反应时间
+    function calculateAverageReactionTime(times) {
+      if (times.length === 0) return 0;
+      // 过滤掉第一次点击（因为没有显示时间参考）
+      const validTimes = times.filter((time, index) => index > 0 || time > 0);
+      if (validTimes.length === 0) return 0;
+      const sum = validTimes.reduce((a, b) => a + b, 0);
+      return Math.round(sum / validTimes.length);
+    }
+
+    // 格式化日期时间
+    function formatDateTime(date) {
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }).replace(/\//g, '-');
+    }
+
+    // 结束实验
+    function endExperiment() {
+      experimentData.endTime = new Date();
+      
+      // 计算平均反应时间
+      const avgRedTime = calculateAverageReactionTime(experimentData.redReactionTimes);
+      const avgGreenTime = calculateAverageReactionTime(experimentData.greenReactionTimes);
+      const avgTotalTime = calculateAverageReactionTime(experimentData.allReactionTimes);
+      
+      // 更新结果表格
+      elements.resultUsername.textContent = experimentData.username;
+      elements.resultStartTime.textContent = formatDateTime(experimentData.startTime);
+      elements.resultEndTime.textContent = formatDateTime(experimentData.endTime);
+      elements.resultRedClicks.textContent = experimentData.redClicks;
+      elements.resultGreenClicks.textContent = experimentData.greenClicks;
+      elements.resultTotalClicks.textContent = experimentData.totalClicks;
+      elements.resultAvgRedTime.textContent = `${avgRedTime}ms`;
+      elements.resultAvgGreenTime.textContent = `${avgGreenTime}ms`;
+      elements.resultAvgTotalTime.textContent = `${avgTotalTime}ms`;
+      
+      // 显示结束界面
+      elements.experimentScreen.style.display = 'none';
+      elements.endScreen.style.display = 'flex';
+    }
+
+    // 保存数据
+    function saveData() {
+      // 构建CSV内容
+      let csvContent = "被试姓名,试验编号,点击按钮,时间戳,反应时间(ms)\n";
+      
+      experimentData.trials.forEach((trial, index) => {
+        csvContent += `${experimentData.username},${trial.trialNumber},${trial.buttonClicked},${trial.timestamp},${trial.reactionTime}\n`;
+      });
+      
+      // 添加总结信息
+      csvContent += `\n总结信息\n`;
+      csvContent += `被试姓名,${experimentData.username}\n`;
+      csvContent += `开始时间,${formatDateTime(experimentData.startTime)}\n`;
+      csvContent += `结束时间,${formatDateTime(experimentData.endTime)}\n`;
+      csvContent += `红色按钮点击次数,${experimentData.redClicks}\n`;
+      csvContent += `绿色按钮点击次数,${experimentData.greenClicks}\n`;
+      csvContent += `总点击次数,${experimentData.totalClicks}\n`;
+      
+      // 计算并添加平均反应时间
+      const avgRedTime = calculateAverageReactionTime(experimentData.redReactionTimes);
+      const avgGreenTime = calculateAverageReactionTime(experimentData.greenReactionTimes);
+      const avgTotalTime = calculateAverageReactionTime(experimentData.allReactionTimes);
+      csvContent += `红色按钮平均反应时间(ms),${avgRedTime}\n`;
+      csvContent += `绿色按钮平均反应时间(ms),${avgGreenTime}\n`;
+      csvContent += `总平均反应时间(ms),${avgTotalTime}\n`;
+      
+      // 创建下载链接
+      const blob = new Blob(["\uFEFF"+csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${experimentData.username}_少即是多实验数据.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      elements.saveStatus.textContent = "数据已保存为CSV文件";
+    }
+
+    // 事件监听
+    elements.redButton.addEventListener('click', () => handleButtonClick('red'));
+    elements.greenButton.addEventListener('click', () => handleButtonClick('green'));
+    
+    elements.restartButton.addEventListener('click', () => {
+      state.redCount = 0;
+      state.greenCount = 0;
+      state.redButtonClicks = 0;
+      state.clickCount = 0;
+      state.buttonsEnabled = true;
+      state.buttonShowTime = new Date().getTime();
+      updateCount();
+      elements.redButton.style.display = 'block';
+      elements.greenButton.style.display = 'block';
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (!state.buttonsEnabled || state.clickCount >= 16) return;
+      
+      const firstButton = elements.buttons.firstElementChild;
+      const isRedFirst = firstButton.id === 'red-btn';
+      
+      if (event.key.toLowerCase() === 'z') {
+        const button = isRedFirst ? elements.redButton : elements.greenButton;
+        button.classList.add('active');
+        setTimeout(() => {
+          button.classList.remove('active');
+          handleButtonClick(isRedFirst ? 'red' : 'green');
+        }, 200);
+      } else if (event.key.toLowerCase() === 'm') {
+        const button = isRedFirst ? elements.greenButton : elements.redButton;
+        button.classList.add('active');
+        setTimeout(() => {
+          button.classList.remove('active');
+          handleButtonClick(isRedFirst ? 'green' : 'red');
+        }, 200);
+      }
+    });
+
+    elements.startButton.addEventListener('click', startExperiment);
+    elements.saveButton.addEventListener('click', saveData);
+  </script>
+</body>
+</html>
