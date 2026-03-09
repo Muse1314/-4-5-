@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>昼夜Stroop实验</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+            touch-action: manipulation;
+            overflow: hidden;
+        }
+        
+        #startScreen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+        }
+        
+        #usernameInput {
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        #startButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        #startButton:hover {
+            background-color: #45a049;
+        }
+        
+        #experimentScreen {
+            display: none;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #image-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10vw;
+        }
+        
+        .stimulus {
+            height: 70vh;
+            width: auto;
+            max-width: 40vw;
+            cursor: pointer;
+            transition: transform 0.2s;
+            object-fit: contain;
+        }
+        
+        .stimulus:hover, .stimulus.active {
+            transform: scale(1.05);
+        }
+        .stimulus.active,
+        .stimulus.key-active {
+            transform: scale(1.05);
+        }
+        
+        #stats {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        #progress {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        #endScreen {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+        }
+        
+        #resultTable {
+            width: 100%;
+            max-width: 500px;
+            border-collapse: collapse;
+            margin: 20px 0;
+            text-align: left;
+            /* background-color: white; */
+            /* box-shadow: 0 2px 8px rgba(0,0,0,0.1); */
+        }
+        
+        #resultTable th {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+            /* background-color: #f5f5f5; */
+        }
+        
+        #resultTable td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        #saveButton {
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        #saveButton:hover {
+            background-color: #0b7dda;
+        }
+        
+        #saveStatus {
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <h2>昼夜Stroop实验</h2>
+        <p>请输入被试姓名：</p>
+        <input type="text" id="usernameInput" placeholder="请输入姓名">
+        <button id="startButton">开始实验</button>
+    </div>
+    
+    <div id="experimentScreen">
+        <div id="progress">试验 0/16</div>
+        <div id="image-container">
+            <img id="leftImage" class="stimulus" src="" alt="左图">
+            <img id="rightImage" class="stimulus" src="" alt="右图">
+        </div>
+        <div id="stats">正确数: 0 / 总点击数: 0</div>
+    </div>
+    
+    <div id="endScreen">
+        <h2>实验完成</h2>
+        <table id="resultTable">
+            <tr><th colspan="2" style="text-align: left;">昼夜stroop</th></tr>
+            <tr><td>被试姓名</td><td id="result-username"></td></tr>
+            <tr><td>开始时间</td><td id="result-startTime"></td></tr>
+            <tr><td>结束时间</td><td id="result-endTime"></td></tr>
+            <tr><td>正确个数</td><td id="result-correctCount"></td></tr>
+            <tr><td>平均反应时</td><td id="result-avgRT"></td></tr>
+            <!-- <tr><td>正确平均反应时</td><td id="result-correctAvgRT"></td></tr> -->
+        </table>
+        <button id="saveButton">保存数据</button>
+        <p id="saveStatus"></p>
+    </div>
+
+    <script>
+        // 实验配置
+        const config = {
+            imagePath: "cailiao/",
+            trialsPerCondition: 8,
+            feedbackDuration: 200,
+            nextTrialDelay: 1000,
+            maxResponseTime: 3000
+        };
+
+        // 实验材料
+        const materials = {
+            dayImage: 'day.png',
+            nightImage: 'night.png',
+            dayAudio: 'day.mp3',
+            nightAudio: 'night.mp3'
+        };
+
+        // 实验数据
+        let experimentData = {
+            username: "",
+            startTime: null,
+            endTime: null,
+            trials: [],
+            correctCount: 0,
+            totalCount: 0,
+            allRTs: [],
+            correctRTs: []
+        };
+
+        // DOM元素
+        const startScreen = document.getElementById('startScreen');
+        const experimentScreen = document.getElementById('experimentScreen');
+        const endScreen = document.getElementById('endScreen');
+        const usernameInput = document.getElementById('usernameInput');
+        const startButton = document.getElementById('startButton');
+        const leftImage = document.getElementById('leftImage');
+        const rightImage = document.getElementById('rightImage');
+        const statsElement = document.getElementById('stats');
+        const progressElement = document.getElementById('progress');
+        const saveButton = document.getElementById('saveButton');
+        const saveStatus = document.getElementById('saveStatus');
+        const resultUsername = document.getElementById('result-username');
+        const resultStartTime = document.getElementById('result-startTime');
+        const resultEndTime = document.getElementById('result-endTime');
+        const resultCorrectCount = document.getElementById('result-correctCount');
+        const resultAvgRT = document.getElementById('result-avgRT');
+        const resultCorrectAvgRT = 0;
+        // const resultCorrectAvgRT = document.getElementById('result-correctAvgRT');
+
+        // 实验控制变量
+        let trials = [];
+        let trialIndex = 0;
+        let currentTrial = null;
+        let audioElement = new Audio();
+        let responseRecorded = false;
+        let audioStarted = false;
+        let trialTimeout = null;
+
+        // 生成试验序列
+        function generateTrials() {
+            trials = [];
+            
+            for (let i = 0; i < config.trialsPerCondition; i++) {
+                trials.push({
+                    audio: materials.dayAudio,
+                    correctKey: 'm',
+                    correctImage: materials.nightImage,
+                    condition: 'day'
+                });
+                
+                trials.push({
+                    audio: materials.nightAudio,
+                    correctKey: 'z',
+                    correctImage: materials.dayImage,
+                    condition: 'night'
+                });
+            }
+            
+            // Fisher-Yates洗牌算法
+            for (let i = trials.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [trials[i], trials[j]] = [trials[j], trials[i]];
+            }
+        }
+
+        // 播放音频
+        function playAudio(audioFile) {
+            return new Promise((resolve) => {
+                audioElement.src = config.imagePath + audioFile;
+                audioElement.onended = resolve;
+                audioElement.play().catch(e => console.log("音频播放失败:", e));
+            });
+        }
+
+        // 开始单个试验
+        async function startTrial() {
+            if (trialIndex >= trials.length) {
+                endExperiment();
+                return;
+            }
+            
+            // 重置状态
+            responseRecorded = false;
+            audioStarted = false;
+            if (trialTimeout) clearTimeout(trialTimeout);
+            
+            currentTrial = trials[trialIndex];
+            progressElement.textContent = `试验 ${trialIndex + 1}/16`;
+            
+            // 显示图片
+            leftImage.src = config.imagePath + materials.dayImage;
+            rightImage.src = config.imagePath + materials.nightImage;
+            
+            // 设置超时自动进入下一题
+            trialTimeout = setTimeout(() => {
+                if (!responseRecorded) handleNoResponse();
+            }, config.nextTrialDelay + config.maxResponseTime);
+            
+            // 延迟1000ms后播放音频
+            setTimeout(async () => {
+                currentTrial.startTime = new Date().toISOString();
+                audioStarted = true;
+                await playAudio(currentTrial.audio);
+            }, config.nextTrialDelay);
+        }
+
+        // 处理无响应
+        function handleNoResponse() {
+            if (responseRecorded) return;
+            
+            responseRecorded = true;
+            experimentData.totalCount++;
+            
+            currentTrial.response = '无响应';
+            currentTrial.endTime = new Date().toISOString();
+            currentTrial.isCorrect = false;
+            currentTrial.rt = null;
+            
+            recordTrial();
+        }
+
+        // 处理有效响应
+        function handleResponse(key) {
+            if(key == 'z'){
+                leftImage.classList.add('key-active'); 
+                // 设置定时器移除效果
+                setTimeout(() => {
+                    leftImage.classList.remove('key-active');
+                }, config.feedbackDuration);
+            }else{
+                rightImage.classList.add('key-active'); 
+                // 设置定时器移除效果
+                setTimeout(() => {
+                    rightImage.classList.remove('key-active');
+                }, config.feedbackDuration);
+            }
+            
+            if (!currentTrial || responseRecorded || !audioStarted) return;
+            
+            responseRecorded = true;
+            experimentData.totalCount++;
+            
+            currentTrial.response = key;
+            currentTrial.endTime = new Date().toISOString();
+            currentTrial.isCorrect = (key === currentTrial.correctKey);
+            currentTrial.rt = new Date(currentTrial.endTime) - new Date(currentTrial.startTime);
+            
+            // 记录所有RT
+            experimentData.allRTs.push(currentTrial.rt);
+            if (currentTrial.isCorrect) {
+                experimentData.correctCount++;
+                experimentData.correctRTs.push(currentTrial.rt);
+            }
+            
+            recordTrial();
+        }
+
+        // 记录试验数据
+        function recordTrial() {
+            experimentData.trials.push(currentTrial);
+            statsElement.innerText = `正确数: ${experimentData.correctCount} / 总点击数: ${experimentData.totalCount}`;
+            
+            // 进入下一题
+            trialIndex++;
+            setTimeout(() => startTrial(), config.nextTrialDelay);
+        }
+
+        // 图片点击处理
+        leftImage.addEventListener("click", () => {
+            if (!responseRecorded && audioStarted) {
+                leftImage.classList.add('active');
+                setTimeout(() => leftImage.classList.remove('active'), config.feedbackDuration);
+                handleResponse('z');
+            }
+        });
+        
+        rightImage.addEventListener("click", () => {
+            if (!responseRecorded && audioStarted) {
+                rightImage.classList.add('active');
+                setTimeout(() => rightImage.classList.remove('active'), config.feedbackDuration);
+                handleResponse('m');
+            }
+        });
+
+        // 键盘响应处理
+        document.addEventListener("keydown", (event) => {
+            if (!responseRecorded && audioStarted) {
+                if (event.key === 'z') handleResponse('z');
+                else if (event.key === 'm') handleResponse('m');
+            }
+        });
+
+        // 开始实验
+        function startExperiment() {
+            const username = usernameInput.value.trim();
+            if (!username) {
+                alert("请输入被试姓名");
+                return;
+            }
+            
+            experimentData = {
+                username: username,
+                startTime: new Date().toISOString(),
+                endTime: null,
+                trials: [],
+                correctCount: 0,
+                totalCount: 0,
+                allRTs: [],
+                correctRTs: []
+            };
+            
+            generateTrials();
+            startScreen.style.display = 'none';
+            experimentScreen.style.display = 'block';
+            statsElement.innerText = `正确数: 0 / 总点击数: 0`;
+            trialIndex = 0;
+            startTrial();
+        }
+
+        // 预加载图片
+        function preloadImages() {
+            [materials.dayImage, materials.nightImage].forEach(img => {
+                new Image().src = config.imagePath + img;
+            });
+        }
+
+        // 格式化时间
+        function formatDateTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }).replace(/\//g, '-');
+        }
+
+        // 结束实验
+        function endExperiment() {
+            experimentData.endTime = new Date().toISOString();
+            
+            // 计算平均反应时
+            avgRT = experimentData.allRTs.length > 0 
+                ? (experimentData.allRTs.reduce((sum, rt) => sum + rt, 0) / experimentData.allRTs.length).toFixed(0)
+                : 0;
+            
+            // 计算正确平均反应时
+            correctAvgRT = experimentData.correctRTs.length > 0 
+                ? (experimentData.correctRTs.reduce((sum, rt) => sum + rt, 0) / experimentData.correctRTs.length).toFixed(0)
+                : 0;
+            
+            // 更新结果表格
+            resultUsername.textContent = experimentData.username;
+            resultStartTime.textContent = formatDateTime(experimentData.startTime);
+            resultEndTime.textContent = formatDateTime(experimentData.endTime);
+            resultCorrectCount.textContent = experimentData.correctCount;
+            resultAvgRT.textContent = `${avgRT}ms`;
+            resultCorrectAvgRT.textContent = `${correctAvgRT}ms`;
+            
+            experimentScreen.style.display = 'none';
+            endScreen.style.display = 'flex';
+        }
+
+        // 保存数据
+        function saveData() {
+            let csvContent = "被试姓名,试验编号,条件,正确答案,被试反应,反应时(ms),是否正确,开始时间,结束时间\n";
+            
+            experimentData.trials.forEach((trial, index) => {
+                csvContent += [
+                    experimentData.username,
+                    index + 1,
+                    trial.condition,
+                    trial.correctKey,
+                    trial.response,
+                    trial.rt || '',
+                    trial.isCorrect ? '是' : '否',
+                    trial.startTime,
+                    trial.endTime
+                ].join(',') + '\n';
+            });
+            
+            csvContent += `\n总结信息\n被试姓名,${experimentData.username}\n`;
+            csvContent += `开始时间,${formatDateTime(experimentData.startTime)}\n`;
+            csvContent += `结束时间,${formatDateTime(experimentData.endTime)}\n`;
+            csvContent += `总试验数,16\n正确数,${experimentData.correctCount}\n`;
+            csvContent += `总响应数,${experimentData.totalCount}\n`;
+            csvContent += `正确率,${experimentData.totalCount > 0 ? (experimentData.correctCount / experimentData.totalCount * 100).toFixed(1) : 0}%\n`;
+            csvContent += `平均反应时,${avgRT}ms\n正确平均反应时,${correctAvgRT}ms\n`;
+            
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${experimentData.username}_昼夜Stroop实验数据.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            saveStatus.textContent = "数据已保存为CSV文件";
+        }
+
+        // 初始化
+        preloadImages();
+        startButton.addEventListener('click', startExperiment);
+        saveButton.addEventListener('click', saveData);
+    </script>
+</body>
+</html>
