@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>DCCS 测试</title>
+  <style>
+    body { 
+      text-align: center; 
+      font-family: Arial, sans-serif;
+      background-color: #f0f8ff;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    /* 开始页面样式 */
+    #startScreen {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    
+    #usernameInput {
+      padding: 12px;
+      font-size: 18px;
+      margin: 20px 0;
+      width: 300px;
+      border: 2px solid #4CAF50;
+      border-radius: 5px;
+    }
+    
+    /* 实验页面样式 */
+    #experimentScreen {
+      display: none;
+      height: 100vh;
+    }
+    
+    #top-images { 
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      height: 30vh;
+      padding: 60px 0 20px 0; /* 增加上边距，使图片下移 */
+    }
+    
+    #top-images img { 
+      width: 30vw;
+      max-width: 300px;
+      height: auto;
+    }
+    
+    #bottom-image { 
+      height: 40vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    #bottom-image img {
+      width: 30vw;
+      max-width: 300px;
+      height: auto;
+    }
+    
+    /* 按钮样式 */
+    .btn {
+      padding: 15px 30px; 
+      font-size: 20px; 
+      margin: 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    
+    .btn:hover {
+      background-color: #45a049;
+    }
+    
+    /* 结束页面样式 */
+    #endScreen {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      padding: 20px;
+    }
+    
+    #resultTable {
+      width: 90%;
+      max-width: 600px;
+      border-collapse: collapse;
+      margin: 20px 0;
+      text-align: left;
+      background-color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    
+    #resultTable th, #resultTable td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    #resultTable th {
+      background-color: #f5f5f5;
+    }
+    
+    #resultTable tr:last-child td {
+      border-bottom: none;
+    }
+    
+    /* 飞行动画 */
+    .flying-image {
+      position: fixed;
+      z-index: 100;
+      transition: all 0.5s ease-out;
+      opacity: 1;
+      width: 30vw;
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <!-- 开始页面 -->
+  <div id="startScreen">
+    <h1>DCCS 维度变化卡片分类测试</h1>
+    <p>请输入儿童姓名：</p>
+    <input type="text" id="usernameInput" placeholder="请输入姓名">
+    <button id="startButton" class="btn">开始测试</button>
+  </div>
+
+  <!-- 实验页面 -->
+  <div id="experimentScreen">
+    <div id="top-images">
+      <img src="DCCS/蓝色爱心.PNG" id="left-img">
+      <img src="DCCS/红色花朵.PNG" id="right-img">
+    </div>
+    <div id="bottom-image"></div>
+    <button id="next-phase" class="btn" style="display:none;">下一阶段</button>
+  </div>
+
+  <!-- 结束页面 -->
+  <div id="endScreen">
+    <h1>测试完成</h1>
+    <table id="resultTable">
+      <tr><th colspan="2">DCCS卡片分类</th></tr>
+      <tr><td>儿童姓名</td><td id="result-username"></td></tr>
+      <tr><td>测试开始时间</td><td id="result-startTime"></td></tr>
+      <tr><td>测试结束时间</td><td id="result-endTime"></td></tr>
+      <tr><td>第一阶段正确个数</td><td id="result-phase1-correct"></td></tr>
+      <tr><td>第二阶段正确个数</td><td id="result-phase2-correct"></td></tr>
+      <tr><td>第一阶段平均反应时(ms)</td><td id="result-phase1-avgRT"></td></tr>
+      <tr><td>第二阶段平均反应时(ms)</td><td id="result-phase2-avgRT"></td></tr>
+      <tr><td>所有测试平均反应时(ms)</td><td id="result-total-avgRT"></td></tr>
+    </table>
+    <button id="download" class="btn">保存结果</button>
+    <p id="saveStatus"></p>
+  </div>
+
+  <script>
+    // 实验配置
+    const trialsPerPhase = 12; // 每种图片各6次，共12次
+    const firstPhaseImages = [
+      { file: "蓝色花朵.PNG", color: "蓝色", shape: "花朵" },
+      { file: "红色爱心.PNG", color: "红色", shape: "爱心" }
+    ];
+    
+    // 全局变量
+    let currentPhase = 1;
+    let trials = [];
+    let trialIndex = 0;
+    let trialStartTime = null;
+    let reactionRecorded = false;
+    let timeoutId = null;
+    let testData = {
+      username: "",
+      startTime: null,
+      endTime: null,
+      phase1: {
+        correct: 0,
+        reactionTimes: []
+      },
+      phase2: {
+        correct: 0,
+        reactionTimes: []
+      },
+      allTrials: []
+    };
+
+    // DOM元素
+    const startScreen = document.getElementById('startScreen');
+    const experimentScreen = document.getElementById('experimentScreen');
+    const endScreen = document.getElementById('endScreen');
+    const usernameInput = document.getElementById('usernameInput');
+    const startBtn = document.getElementById('startButton');
+    const nextBtn = document.getElementById('next-phase');
+    const downloadBtn = document.getElementById('download');
+    const bottomDiv = document.getElementById('bottom-image');
+    const leftImg = document.getElementById('left-img');
+    const rightImg = document.getElementById('right-img');
+    const saveStatus = document.getElementById('saveStatus');
+    
+    // 结果表格元素
+    const resultUsername = document.getElementById('result-username');
+    const resultStartTime = document.getElementById('result-startTime');
+    const resultEndTime = document.getElementById('result-endTime');
+    const resultPhase1Correct = document.getElementById('result-phase1-correct');
+    const resultPhase2Correct = document.getElementById('result-phase2-correct');
+    const resultPhase1AvgRT = document.getElementById('result-phase1-avgRT');
+    const resultPhase2AvgRT = document.getElementById('result-phase2-avgRT');
+    const resultTotalAvgRT = document.getElementById('result-total-avgRT');
+
+    // 事件监听
+    startBtn.onclick = startTest;
+    nextBtn.onclick = () => startPhase(2);
+    downloadBtn.onclick = saveData;
+
+    // 开始测试
+    function startTest() {
+      const username = usernameInput.value.trim();
+      if (!username) {
+        alert("请输入儿童姓名");
+        return;
+      }
+      
+      testData = {
+        username: username,
+        startTime: new Date().toISOString(),
+        endTime: null,
+        phase1: {
+          correct: 0,
+          reactionTimes: []
+        },
+        phase2: {
+          correct: 0,
+          reactionTimes: []
+        },
+        allTrials: []
+      };
+      
+      startScreen.style.display = "none";
+      experimentScreen.style.display = "block";
+      startPhase(1);
+    }
+
+    // 开始测试阶段
+    function startPhase(phase) {
+      currentPhase = phase;
+      trialIndex = 0;
+      
+      // 创建包含6次蓝色花朵和6次红色爱心的数组
+      let imagePool = [];
+      for (let i = 0; i < trialsPerPhase/2; i++) {
+        imagePool.push(firstPhaseImages[0]); // 蓝色花朵
+        imagePool.push(firstPhaseImages[1]); // 红色爱心
+      }
+      trials = shuffle(imagePool);
+      
+      nextBtn.style.display = "none";
+      document.addEventListener("keydown", handleKeyPress);
+      nextTrial();
+    }
+
+    // 下一个测试
+    function nextTrial() {
+      if (trialIndex >= trials.length) {
+        document.removeEventListener("keydown", handleKeyPress);
+        if (currentPhase === 1) {
+          nextBtn.style.display = "inline-block";
+        } else {
+          endTest();
+        }
+        return;
+      }
+
+      const trial = trials[trialIndex];
+      reactionRecorded = false;
+      bottomDiv.innerHTML = `<img src="DCCS/${trial.file}" id="trial-img" style="opacity:1;">`;
+      trialStartTime = Date.now();
+      timeoutId = setTimeout(() => {
+        if (!reactionRecorded) {
+          recordTrial("", false, "timeout");
+          showNextAfterDelay();
+        }
+      }, 5000);
+    }
+
+    // 处理按键响应
+    function handleKeyPress(e) {
+      if (reactionRecorded) return;
+      const key = e.key.toUpperCase();
+      if (key === "Z" || key === "M") {
+        const reactionTime = Date.now() - trialStartTime;
+        const trial = trials[trialIndex];
+        let correctKey = "";
+        let targetPosition = null;
+
+        if (currentPhase === 1) {
+          correctKey = trial.color === "蓝色" ? "Z" : "M";
+        } else {
+          correctKey = trial.shape === "爱心" ? "Z" : "M";
+        }
+
+        const isCorrect = key === correctKey;
+        if (isCorrect) {
+          if (currentPhase === 1) {
+            testData.phase1.correct++;
+            testData.phase1.reactionTimes.push(reactionTime);
+          } else {
+            testData.phase2.correct++;
+            testData.phase2.reactionTimes.push(reactionTime);
+          }
+        }
+        
+        recordTrial(key, isCorrect, reactionTime);
+        clearTimeout(timeoutId);
+        
+        // 获取目标位置（左侧或右侧图片的位置）
+        targetPosition = key === "Z" ? 
+          leftImg.getBoundingClientRect() : 
+          rightImg.getBoundingClientRect();
+        
+        // 创建飞行动画
+        createFlyingAnimation(bottomDiv.firstChild, targetPosition);
+        
+        // 立即移除原图
+        bottomDiv.innerHTML = "";
+        
+        // 延迟开始下一次测试
+        showNextAfterDelay();
+      }
+    }
+
+    // 创建飞行动画
+    function createFlyingAnimation(imageElement, targetRect) {
+      const img = imageElement.cloneNode();
+      img.className = "flying-image";
+      img.style.left = imageElement.getBoundingClientRect().left + "px";
+      img.style.top = imageElement.getBoundingClientRect().top + "px";
+      document.body.appendChild(img);
+      
+      // 触发重绘
+      void img.offsetWidth;
+      
+      // 设置动画目标位置
+      img.style.left = targetRect.left + "px";
+      img.style.top = targetRect.top + "px";
+      img.style.opacity = "0";
+      img.style.transform = "scale(0.5)";
+      
+      // 动画结束后移除元素
+      setTimeout(() => {
+        img.remove();
+      }, 500);
+    }
+
+    // 记录测试数据
+    function recordTrial(response, correct, reactionTime) {
+      reactionRecorded = true;
+      const trial = trials[trialIndex];
+      const result = {
+        phase: currentPhase,
+        trial: trialIndex + 1,
+        image: trial.file,
+        color: trial.color,
+        shape: trial.shape,
+        response: response,
+        correct: correct,
+        reactionTime: typeof reactionTime === 'number' ? reactionTime : reactionTime,
+        timestamp: new Date().toISOString()
+      };
+      
+      testData.allTrials.push(result);
+    }
+
+    // 延迟显示下一个测试
+    function showNextAfterDelay() {
+      setTimeout(() => {
+        trialIndex++;
+        nextTrial();
+      }, 1000);
+    }
+
+    // 结束测试
+    function endTest() {
+      testData.endTime = new Date().toISOString();
+      
+      // 计算平均反应时
+      const phase1AvgRT = testData.phase1.reactionTimes.length > 0 
+        ? Math.round(testData.phase1.reactionTimes.reduce((a, b) => a + b, 0) / testData.phase1.reactionTimes.length)
+        : 0;
+      
+      const phase2AvgRT = testData.phase2.reactionTimes.length > 0 
+        ? Math.round(testData.phase2.reactionTimes.reduce((a, b) => a + b, 0) / testData.phase2.reactionTimes.length)
+        : 0;
+      
+      const allRTs = [...testData.phase1.reactionTimes, ...testData.phase2.reactionTimes];
+      const totalAvgRT = allRTs.length > 0 
+        ? Math.round(allRTs.reduce((a, b) => a + b, 0) / allRTs.length)
+        : 0;
+      
+      // 更新结果表格
+      resultUsername.textContent = testData.username;
+      resultStartTime.textContent = formatDateTime(testData.startTime);
+      resultEndTime.textContent = formatDateTime(testData.endTime);
+      resultPhase1Correct.textContent = testData.phase1.correct;
+      resultPhase2Correct.textContent = testData.phase2.correct;
+      resultPhase1AvgRT.textContent = phase1AvgRT;
+      resultPhase2AvgRT.textContent = phase2AvgRT;
+      resultTotalAvgRT.textContent = totalAvgRT;
+      
+      experimentScreen.style.display = "none";
+      endScreen.style.display = "flex";
+    }
+
+    // 保存数据
+    function saveData() {
+      let csvContent = "阶段,题号,图片,色彩,形状,反应键,是否正确,反应时间(ms),时间戳\n";
+      
+      // 添加所有测试数据
+      testData.allTrials.forEach(trial => {
+        csvContent += [
+          trial.phase,
+          trial.trial,
+          trial.image,
+          trial.color,
+          trial.shape,
+          trial.response,
+          trial.correct ? "是" : "否",
+          trial.reactionTime,
+          trial.timestamp
+        ].join(',') + '\n';
+      });
+      
+      // 添加汇总信息
+      csvContent += "\n汇总信息\n";
+      csvContent += `儿童姓名,${testData.username}\n`;
+      csvContent += `测试开始时间,${formatDateTime(testData.startTime)}\n`;
+      csvContent += `测试结束时间,${formatDateTime(testData.endTime)}\n`;
+      csvContent += `第一阶段正确个数,${testData.phase1.correct}\n`;
+      csvContent += `第二阶段正确个数,${testData.phase2.correct}\n`;
+      
+      const phase1AvgRT = testData.phase1.reactionTimes.length > 0 
+        ? Math.round(testData.phase1.reactionTimes.reduce((a, b) => a + b, 0) / testData.phase1.reactionTimes.length)
+        : 0;
+      
+      const phase2AvgRT = testData.phase2.reactionTimes.length > 0 
+        ? Math.round(testData.phase2.reactionTimes.reduce((a, b) => a + b, 0) / testData.phase2.reactionTimes.length)
+        : 0;
+      
+      const allRTs = [...testData.phase1.reactionTimes, ...testData.phase2.reactionTimes];
+      const totalAvgRT = allRTs.length > 0 
+        ? Math.round(allRTs.reduce((a, b) => a + b, 0) / allRTs.length)
+        : 0;
+      
+      csvContent += `第一阶段平均反应时(ms),${phase1AvgRT}\n`;
+      csvContent += `第二阶段平均反应时(ms),${phase2AvgRT}\n`;
+      csvContent += `所有测试平均反应时(ms),${totalAvgRT}\n`;
+      
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${testData.username}_DCCS测试结果.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      saveStatus.textContent = "数据已保存为CSV文件";
+    }
+
+    // 辅助函数：洗牌算法
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    // 辅助函数：格式化时间
+    function formatDateTime(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }).replace(/\//g, '-');
+    }
+  </script>
+</body>
+</html>
