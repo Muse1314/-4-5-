@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flanker Fish 实验</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+            touch-action: manipulation;
+            overflow: hidden;
+        }
+        
+        #startScreen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+        }
+        
+        #usernameInput {
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        #startButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        #startButton:hover {
+            background-color: #45a049;
+        }
+        
+        #experimentScreen {
+            display: none;
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+        
+        #image-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        #stimulus {
+            width: 50vw;
+            max-width: 50%;
+            height: auto;
+            display: block;
+        }
+        
+        #stats {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        #endScreen {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+        }
+        
+        #resultTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        #resultTable th {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        #resultTable td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        #saveButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        
+        #saveButton:hover {
+            background-color: #0b7dda;
+        }
+        
+        #saveStatus {
+            margin-top: 20px;
+            color: #666;
+        }
+        
+        .debug-left {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .debug-right {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 50%;
+            height: 100%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <h2>Flanker Fish 实验</h2>
+        <p>请输入被试姓名：</p>
+        <input type="text" id="usernameInput" placeholder="请输入姓名">
+        <button id="startButton">开始实验</button>
+    </div>
+    
+    <div id="experimentScreen">
+        <div id="image-container">
+            <div class="debug-left"></div>
+            <div class="debug-right"></div>
+            <img id="stimulus" src="" alt="实验图片">
+        </div>
+        <div id="stats">正确数: 0 / 总点击数: 0</div>
+    </div>
+    
+    <div id="endScreen">
+        <h2>实验完成</h2>
+        <table id="resultTable">
+            <tr><th colspan="2" style="text-align: left;">小鱼flanker</th></tr>
+            <tr><td>被试姓名</td><td id="result-username"></td></tr>
+            <tr><td>开始时间</td><td id="result-startTime"></td></tr>
+            <tr><td>结束时间</td><td id="result-endTime"></td></tr>
+            <tr><td>正确个数</td><td id="result-correctCount"></td></tr>
+            <tr><td>平均反应时</td><td id="result-avgRT"></td></tr>
+        </table>
+        <button id="saveButton">保存数据</button>
+        <p id="saveStatus"></p>
+    </div>
+
+    <script>
+        // 实验配置 - 使用相对路径
+        const config = {
+            imagePath: "Flanker Fish/",
+            trialsPerCondition: 4,
+            aDuration: 1000,
+            bDuration: 1500,
+            cDuration: 500
+        };
+
+        // 图片资源
+        const images = {
+            A: 'A.png',
+            B: ['一致左.png', '一致右.png', '错乱左.png', '错乱右.png', '单独左.png', '单独右.png'],
+            C: 'C.png'
+        };
+
+        // 实验数据
+        let experimentData = {
+            username: "",
+            startTime: null,
+            endTime: null,
+            trials: [],
+            stats: {
+                totalTrials: 0,
+                correctCount: 0,
+                correctReactionTimes: []
+            }
+        };
+
+        // DOM元素
+        const startScreen = document.getElementById('startScreen');
+        const experimentScreen = document.getElementById('experimentScreen');
+        const endScreen = document.getElementById('endScreen');
+        const usernameInput = document.getElementById('usernameInput');
+        const startButton = document.getElementById('startButton');
+        const stimulus = document.getElementById('stimulus');
+        const statsElement = document.getElementById('stats');
+        const saveButton = document.getElementById('saveButton');
+        const saveStatus = document.getElementById('saveStatus');
+        const imageContainer = document.getElementById('image-container');
+
+        // 结果表格元素
+        const resultUsername = document.getElementById('result-username');
+        const resultStartTime = document.getElementById('result-startTime');
+        const resultEndTime = document.getElementById('result-endTime');
+        const resultCorrectCount = document.getElementById('result-correctCount');
+        const resultAvgRT = document.getElementById('result-avgRT');
+
+        // 实验控制变量
+        let trials = [];
+        let trialIndex = 0;
+        let keyPressed = false;
+        let responseWindow = false;
+        let avgRT = 0;
+
+        // 生成试验序列
+        function generateTrials() {
+            trials = [];
+            for (let i = 0; i < config.trialsPerCondition; i++) {
+                images.B.forEach(img => {
+                    trials.push({
+                        sequence: [images.A, img, images.C],
+                        correctKey: img.includes('左') ? 'z' : 'm',
+                        condition: getCondition(img),
+                        imageName: img
+                    });
+                });
+            }
+            trials = shuffleArray(trials);
+            experimentData.stats.totalTrials = trials.length;
+        }
+
+        // 获取试验条件
+        function getCondition(imgName) {
+            if (imgName.includes('一致')) return '一致';
+            if (imgName.includes('错乱')) return '错乱';
+            if (imgName.includes('单独')) return '单独';
+            return '未知';
+        }
+
+        // 数组随机排序
+        function shuffleArray(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        // 显示图片
+        function showImage(src, duration, callback) {
+            stimulus.src = config.imagePath + src;
+            setTimeout(callback, duration);
+        }
+
+        // 开始单个试验
+        function startTrial() {
+            if (trialIndex >= trials.length) {
+                endExperiment();
+                return;
+            }
+            
+            const currentTrial = trials[trialIndex];
+            keyPressed = false;
+            responseWindow = false;
+            
+            currentTrial.startTime = new Date();
+            
+            showImage(currentTrial.sequence[0], config.aDuration, () => {
+                if (trialIndex >= trials.length) return;
+                
+                responseWindow = true;
+                showImage(currentTrial.sequence[1], config.bDuration, () => {
+                    if (trialIndex >= trials.length) return;
+                    
+                    showImage(currentTrial.sequence[2], config.cDuration, () => {
+                        responseWindow = false;
+                        
+                        currentTrial.endTime = new Date();
+                        if (!keyPressed) {
+                            currentTrial.response = '无响应';
+                            currentTrial.isCorrect = false;
+                            currentTrial.responseTime = null;
+                            currentTrial.inputMethod = '无响应';
+                        }
+                        
+                        experimentData.trials.push(currentTrial);
+                        trialIndex++;
+                        startTrial();
+                    });
+                });
+            });
+        }
+
+        // 处理用户响应
+        function handleUserResponse(responseKey, inputMethod = 'keyboard') {
+            if (keyPressed || !responseWindow || trialIndex >= trials.length) return;
+            
+            const currentTrial = trials[trialIndex];
+            if (responseKey === 'z' || responseKey === 'm') {
+                keyPressed = true;
+                
+                currentTrial.response = responseKey;
+                currentTrial.responseTime = new Date();
+                currentTrial.isCorrect = (responseKey === currentTrial.correctKey);
+                currentTrial.rt = new Date(currentTrial.responseTime) - new Date(currentTrial.startTime);
+                currentTrial.inputMethod = inputMethod;
+                
+                if (currentTrial.isCorrect) {
+                    experimentData.stats.correctCount++;
+                    experimentData.stats.correctReactionTimes.push(currentTrial.rt);
+                }
+                
+                statsElement.innerText = `正确数: ${experimentData.stats.correctCount} / 总试验数: ${experimentData.stats.totalTrials}`;
+            }
+        }
+
+        // 事件监听
+        document.addEventListener("keydown", function(event) {
+            handleUserResponse(event.key.toLowerCase(), 'keyboard');
+        });
+
+        imageContainer.addEventListener("click", function(event) {
+            if (!responseWindow) return;
+            
+            const imgRect = stimulus.getBoundingClientRect();
+            const centerX = imgRect.left + imgRect.width / 2;
+            const responseKey = event.clientX < centerX ? 'z' : 'm';
+            handleUserResponse(responseKey, 'mouse');
+        });
+
+        // 开始实验
+        function startExperiment() {
+            const username = usernameInput.value.trim();
+            if (!username) {
+                alert("请输入被试姓名");
+                return;
+            }
+            
+            experimentData = {
+                username: username,
+                startTime: new Date(),
+                endTime: null,
+                trials: [],
+                stats: {
+                    totalTrials: 0,
+                    correctCount: 0,
+                    correctReactionTimes: []
+                }
+            };
+            
+            generateTrials();
+            startScreen.style.display = 'none';
+            experimentScreen.style.display = 'block';
+            statsElement.innerText = `正确数: 0 / 总试验数: ${experimentData.stats.totalTrials}`;
+            trialIndex = 0;
+            startTrial();
+        }
+
+        // 结束实验
+        function endExperiment() {
+            experimentData.endTime = new Date();
+            
+            avgRT = experimentData.stats.correctReactionTimes.length > 0 
+                ? (experimentData.stats.correctReactionTimes.reduce((sum, rt) => sum + rt, 0) / experimentData.stats.correctReactionTimes.length).toFixed(0)
+                : 0;
+            
+            resultUsername.textContent = experimentData.username;
+            resultStartTime.textContent = formatDateTime(experimentData.startTime);
+            resultEndTime.textContent = formatDateTime(experimentData.endTime);
+            resultCorrectCount.textContent = experimentData.stats.correctCount;
+            resultAvgRT.textContent = `${avgRT}ms`;
+            
+            experimentScreen.style.display = 'none';
+            endScreen.style.display = 'flex';
+        }
+
+        // 格式化日期时间
+        function formatDateTime(date) {
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }).replace(/\//g, '-');
+        }
+
+        // 保存数据
+        function saveData() {
+            let csvContent = "被试姓名,试验编号,条件,图片名称,正确答案,被试反应,反应时(ms),是否正确,输入方式,响应时间,开始时间,结束时间\n";
+            
+            experimentData.trials.forEach((trial, index) => {
+                csvContent += `${experimentData.username},${index + 1},${trial.condition},${trial.imageName},${trial.correctKey},${trial.response || '无响应'},${trial.rt || ''},${trial.isCorrect ? '是' : '否'},${trial.inputMethod || ''},${trial.responseTime ? formatDateTime(trial.responseTime) : ''},${formatDateTime(trial.startTime)},${formatDateTime(trial.endTime)}\n`;
+            });
+            
+            csvContent += `\n总结信息\n`;
+            csvContent += `被试姓名,${experimentData.username}\n`;
+            csvContent += `开始时间,${formatDateTime(experimentData.startTime)}\n`;
+            csvContent += `结束时间,${formatDateTime(experimentData.endTime)}\n`;
+            csvContent += `总试验数,${experimentData.stats.totalTrials}\n`;
+            csvContent += `正确数,${experimentData.stats.correctCount}\n`;
+            csvContent += `正确反应平均时长,${avgRT}ms\n`;
+            
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${experimentData.username}_FlankerFish实验数据.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            saveStatus.textContent = "数据已保存为CSV文件";
+        }
+
+        // 事件监听
+        startButton.addEventListener('click', startExperiment);
+        saveButton.addEventListener('click', saveData);
+    </script>
+</body>
+</html>
